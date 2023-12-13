@@ -8,7 +8,7 @@ Requires:
 * C++ 17 or higher
 * OpenCL 1.2 or higher
 
-Note: This requires OpenCL ICD Loader, OpenCL Headers, and LIBTIFF. I reference the versions of this libraries that build with Autoscoper's superbuild.
+Note: This requires OpenCL ICD Loader, OpenCL Headers, and LIBTIFF. I reference the versions of these libraries that build with Autoscoper's superbuild.
 
 ```
 mkdir build
@@ -17,7 +17,7 @@ cmake .. -DCMAKE_BUILD_TYPE=<same type that Autoscoper was built with> \
      -DOpenCLHeaders_DIR=<autoscoper-build>\OpenCL-Headers-build\OpenCLHeaders \
      -DOpenCLICDLoader_DIR=<autoscoper-build>OpenCL-ICD-Loader-build\OpenCLICDLoader \
      -DTIFF_INCLUDE_DIR=<autoscoper-build>/TIFF-install/include \
-     -DTIFF_LIBRARY:UNINITIALIZED=<autoscoper-build>TIFF-install\lib\tiff.lib \
+     -DTIFF_LIBRARY=<autoscoper-build>TIFF-install\lib\tiff.lib \
 ```
 Make sure the `TIFF_LIBRARY` is referencing either the debug or release version of the library depending on the build type.
 
