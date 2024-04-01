@@ -8,12 +8,11 @@ project(EOS)
 
 set(CMAKE_CXX_STANDARD 17)
 
-set(SOURCE_FILES main.cpp src/TiffImage.cpp src/EosDRR2D.cl)
+set(SOURCE_FILES main.cpp src/TiffImage.cpp src/EosDrr2D.cl)
 set(HEADER_FILES src/TiffImage.h)
 
-find_package(OpenCLHeaders REQUIRED)
-find_package(OpenCLICDLoader REQUIRED)
 find_package(TIFF REQUIRED MODULE)
+find_package(OpenCL REQUIRED)
 
 add_executable(${PROJECT_NAME} ${SOURCE_FILES} ${HEADER_FILES})
 

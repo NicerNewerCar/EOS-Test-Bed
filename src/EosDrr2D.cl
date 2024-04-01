@@ -29,7 +29,7 @@ __kernel void eos_project_drr(
 
   const sampler_t sampler = CLK_NORMALIZED_COORDS_FALSE | // Natural coordinates
     CLK_ADDRESS_CLAMP | // Clamp to zeros at borders
-    CLK_FILTER_LINEAR; // No interpolation
+    CLK_FILTER_NEAREST;//LINEAR; // No interpolation
 
   float z = z0 - lambda_z * v; // height index in volume (world coordinates)
 

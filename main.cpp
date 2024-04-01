@@ -1,40 +1,39 @@
-#include <iostream>
-#include <fstream>
-#include <string>
-#include <windows.h>
-#include <CL/opencl.h>
 #include "src/TiffImage.h"
+#include <CL/opencl.h>
+#include <cstring>
+#include <fstream>
+#include <iostream>
+#include <string>
 
-
-
-#define DEBUG 1
+// #define DEBUG 1
 
 // EOS parameters
-float d_f = 1300.f; // Frontal emitter to detector distance (mm)
-float f_f = 987.f; // Frontal emitter to isocenter distance (mm)
-float d_l = 1300.f; // Lateral emitter to detector distance (mm)
-float f_l = 918.f; // Lateral emitter to isocenter distance (mm)
-float w_f = 450.f; // Frontal detector width (mm)
-float w_l = 450.f; // Lateral detector width (mm)
+float d_f = 1300.f;         // Frontal emitter to detector distance (mm)
+float f_f = 987.f;          // Frontal emitter to isocenter distance (mm)
+float d_l = 1300.f;         // Lateral emitter to detector distance (mm)
+float f_l = 918.f;          // Lateral emitter to isocenter distance (mm)
+float w_f = 450.f;          // Frontal detector width (mm)
+float w_l = 450.f;          // Lateral detector width (mm)
 float lambda_f = 0.179363f; // Frontal detector pixel pitch (mm)
 float lambda_l = 0.179363f; // Lateral detector pixel pitch (mm)
 float lambda_z = 0.179363f; // Vertical pixel pitch (mm)
-unsigned int R = 3000; // Number of rows
-unsigned int C_f = 1896; // Highest column index in frontal DRR (C_f + 1 total columns)
-unsigned int C_l = 1763; // Highest column index in lateral DRR (C_l + 1 total columns)
+unsigned int R = 3000;      // Number of rows
+unsigned int C_f =
+    1896; // Highest column index in frontal DRR (C_f + 1 total columns)
+unsigned int C_l =
+    1763;       // Highest column index in lateral DRR (C_l + 1 total columns)
 float z0 = 0.f; // Initial z value (mm)
 unsigned int is_frontal = 0; // 1 if frontal, 0 if lateral
 
-
-void check_error(cl_int err, const char* msg) {
+void check_error(cl_int err, const char *msg) {
   if (err != CL_SUCCESS) {
-    std::cout << msg <<  " " << err <<std::endl;
+    std::cout << msg << " " << err << std::endl;
     throw std::runtime_error(msg);
   }
 }
 
-void read_tiff(const std::string& fName, unsigned short* data) {
-  TIFF* tif = TIFFOpen(fName.c_str(), "r");
+void read_tiff(const std::string &fName, unsigned short *data) {
+  TIFF *tif = TIFFOpen(fName.c_str(), "r");
   if (!tif) {
     std::cout << "Error opening TIFF file" << std::endl;
     exit(1);
@@ -42,18 +41,18 @@ void read_tiff(const std::string& fName, unsigned short* data) {
 
   TiffImage img;
   tiffImageReadMeta(tif, &img);
-  
+
   int dircount = 0;
   do {
-      dircount++;
-  } while(TIFFReadDirectory(tif));
+    dircount++;
+  } while (TIFFReadDirectory(tif));
 
   int width = img.width;
   int height = img.height;
   int depth = dircount;
   int bps = img.bitsPerSample;
 
-  unsigned short* dp = data;
+  unsigned short *dp = data;
   for (int i = 0; i < depth; i++) {
     TIFFSetDirectory(tif, i);
     tiffImageRead(tif, &img);
@@ -69,32 +68,44 @@ void read_tiff(const std::string& fName, unsigned short* data) {
   TIFFClose(tif);
 }
 
-void save_debug_image(const std::string& fName, unsigned short* data, int width, int height) {
+void save_debug_image(const std::string &fName, unsigned short *data, int width,
+                      int height) {
   // Write out a pgm file for debugging
   std::ofstream ofs(fName.c_str(), std::ios::binary);
   ofs << "P5\n" << width << " " << height << "\n" << 65535 << "\n";
-  ofs.write((char*)data, width * height * sizeof(unsigned short));
+  ofs.write((char *)data, width * height * sizeof(unsigned short));
   ofs.close();
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char *argv[]) {
 
   unsigned int is_lateral = 0;
   unsigned int vol_dims[3];
   std::string volName;
   std::string outFname;
 
-  if (argc < 7) {
-    std::cerr << "Usage: " << argv[0] << " <volume name> <output name (.pgm)> <is_lateral> <vol_dim_x> <vol_dim_y> <vol_dim_z>" << std::endl;
-    return -1;
-  }
+  // if (argc < 7) {
+  //   std::cerr << "Usage: " << argv[0]
+  //             << " <volume name> <output name (.pgm)> <is_lateral>
+  //             <vol_dim_x> "
+  //                "<vol_dim_y> <vol_dim_z>"
+  //             << std::endl;
+  //   return -1;
+  // }
 
-  volName = argv[1];
-  outFname = argv[2];
-  is_lateral = atoi(argv[3]);
-  vol_dims[0] = atoi(argv[4]);
-  vol_dims[1] = atoi(argv[5]);
-  vol_dims[2] = atoi(argv[6]);
+  // volName = argv[1];
+  // outFname = argv[2];
+  // is_lateral = atoi(argv[3]);
+  // vol_dims[0] = atoi(argv[4]);
+  // vol_dims[1] = atoi(argv[5]);
+  // vol_dims[2] = atoi(argv[6]);
+
+  volName = "/home/aj/Documents/EOS-Test-Bed/Volumes/mc3_dcm_cropped.tif";
+  outFname = "test.pgm";
+  is_lateral = 0;
+  vol_dims[0] = 60;
+  vol_dims[1] = 59;
+  vol_dims[2] = 116;
 
 #ifdef DEBUG
   std::cout << "Df " << d_f << std::endl;
@@ -128,23 +139,28 @@ int main(int argc, char* argv[]) {
   // Get platform
   cl_uint num_platforms;
   cl_platform_id platforms[10];
-  check_error(clGetPlatformIDs(10, platforms, &num_platforms),"Error getting platforms");
-  //platform = platforms[0]; // This is the GPU - Use this for OclGrind too
-  platform = platforms[1]; // This is the Integreated Graphics
-  //platform = platforms[2]; // This is the CPU
+  check_error(clGetPlatformIDs(10, platforms, &num_platforms),
+              "Error getting platforms");
+  platform = platforms[0]; // This is the GPU - Use this for OclGrind too
+  // platform = platforms[1]; // This is the Integreated Graphics
+  // platform = platforms[2]; // This is the CPU
 
   // Get device
-  check_error(clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 1, &device, NULL), "Error getting device");
+  check_error(clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 1, &device, NULL),
+              "Error getting device");
 
 #ifdef DEBUG
-// Print out device name
+  // Print out device name
   char device_name[128];
-  check_error(clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(device_name), device_name, NULL), "Error getting device name");
+  check_error(clGetDeviceInfo(device, CL_DEVICE_NAME, sizeof(device_name),
+                              device_name, NULL),
+              "Error getting device name");
   std::cout << "Device: " << device_name << std::endl;
 #endif
 
-  //Context properties
-  cl_context_properties properties[] = {CL_CONTEXT_PLATFORM, (cl_context_properties)platform, 0};
+  // Context properties
+  cl_context_properties properties[] = {CL_CONTEXT_PLATFORM,
+                                        (cl_context_properties)platform, 0};
 
   // Create context
   context = clCreateContext(properties, 1, &device, NULL, NULL, &err);
@@ -155,38 +171,45 @@ int main(int argc, char* argv[]) {
   check_error(err, "Error creating command queue");
 
   // Create program
-  std::string kernel_source = "C:/Users/anthony.lombardi/Projects/EOS/src/EosDrr2D.cl";
+  std::string kernel_source = "/home/aj/Documents/EOS-Test-Bed/src/EosDrr2D.cl";
   std::ifstream kernel_file(kernel_source);
   if (!kernel_file.is_open()) {
     std::cout << "Error opening kernel file" << std::endl;
     exit(1);
   }
-  std::string kernel_code(std::istreambuf_iterator<char>(kernel_file), (std::istreambuf_iterator<char>()));
-  const char* kernel_source_cstr = kernel_code.c_str();
-  program = clCreateProgramWithSource(context, 1, &kernel_source_cstr, NULL, &err);
+  std::string kernel_code(std::istreambuf_iterator<char>(kernel_file),
+                          (std::istreambuf_iterator<char>()));
+  const char *kernel_source_cstr = kernel_code.c_str();
+  program =
+      clCreateProgramWithSource(context, 1, &kernel_source_cstr, NULL, &err);
   check_error(err, "Error creating program");
 
   // Build program
   err = clBuildProgram(program, 1, &device, NULL, NULL, NULL);
   if (err == CL_BUILD_PROGRAM_FAILURE) {
     size_t log_size;
-    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL, &log_size);
-    char* log = new char[log_size];
-    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log, NULL);
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, NULL,
+                          &log_size);
+    char *log = new char[log_size];
+    clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log_size, log,
+                          NULL);
     std::cout << log << std::endl;
     delete[] log;
     exit(1);
   }
-  check_error(err,"Error building program");
+  check_error(err, "Error building program");
 
   // Create kernel
   kernel = clCreateKernel(program, "eos_project_drr", &err);
   check_error(err, "Error creating kernel");
 
   // Create input volume as a
-  unsigned short* vol_data = new unsigned short[vol_dims[0] * vol_dims[1] * vol_dims[2] * 2];
+  unsigned short *vol_data =
+      new unsigned short[vol_dims[0] * vol_dims[1] * vol_dims[2] * 2];
   read_tiff(volName, vol_data);
-  input_vol = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, vol_dims[0] * vol_dims[1] * vol_dims[2] * 2, vol_data, &err);
+  input_vol = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                             vol_dims[0] * vol_dims[1] * vol_dims[2] * 2,
+                             vol_data, &err);
   check_error(err, "Error creating input volume");
   cl_image_desc vol_desc;
   vol_desc.image_type = CL_MEM_OBJECT_IMAGE3D;
@@ -203,27 +226,31 @@ int main(int argc, char* argv[]) {
   vol_format.image_channel_order = CL_R;
   vol_format.image_channel_data_type = CL_UNSIGNED_INT16;
 
-  image = clCreateImage(context, CL_MEM_READ_ONLY, &vol_format, &vol_desc, NULL, &err);
+  image = clCreateImage(context, CL_MEM_READ_ONLY, &vol_format, &vol_desc, NULL,
+                        &err);
   check_error(err, "Error creating input volume image");
   size_t origin[] = {0, 0, 0};
   size_t dims[] = {vol_dims[0], vol_dims[1], vol_dims[2]};
-  err = clEnqueueWriteImage(queue, image, CL_TRUE, origin, dims, 0, 0, vol_data, 0, NULL, NULL);
+  err = clEnqueueWriteImage(queue, image, CL_TRUE, origin, dims, 0, 0, vol_data,
+                            0, NULL, NULL);
   check_error(err, "Error writing input volume image");
 
-  float world_to_vol[16] = { 0.0f };
+  float world_to_vol[16] = {0.0f};
   world_to_vol[0] = 1.f / 0.390625f;
   world_to_vol[5] = 1.f / 0.390625f;
   world_to_vol[10] = 1.f / 0.625f;
   world_to_vol[12] = -50.f; // X translation
-  world_to_vol[13] = 50.f; // Y translation
-  world_to_vol[14] = 50.f; // Z translation
+  world_to_vol[13] = 50.f;  // Y translation
+  world_to_vol[14] = 50.f;  // Z translation
   world_to_vol[15] = 1.0f;
 
-  world_to_vol_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 16 * sizeof(float), world_to_vol, &err);
+  world_to_vol_buf =
+      clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                     16 * sizeof(float), world_to_vol, &err);
   check_error(err, "Error creating world to volume transform");
 
   // Find the corners of the volume in world space
-  float vol_corners[8][4] = { 0.0f };
+  float vol_corners[8][4] = {0.0f};
   vol_corners[0][3] = 1.f;
   vol_corners[1][0] = vol_dims[0] - 1.f;
   vol_corners[1][3] = 1.f;
@@ -245,10 +272,9 @@ int main(int argc, char* argv[]) {
   vol_corners[7][2] = vol_dims[2] - 1.f;
   vol_corners[7][3] = 1.f;
 
-
   // Project the corners onto the DRR image
-  //float min_max[4] = { C_f,R,0,0 }; // min_x min_y max_x max_y
-  //for (int i = 0; i < 8; i++) {
+  // float min_max[4] = { C_f,R,0,0 }; // min_x min_y max_x max_y
+  // for (int i = 0; i < 8; i++) {
   //  float world[4] = { 0.0f };
   //  for (int j = 0; j < 4; j++) {
   //    world[j] = vol_corners[i][j];
@@ -279,28 +305,31 @@ int main(int argc, char* argv[]) {
   //    min_max[3] = v;
   //}
 
-  //min_max[2] = min_max[2] - min_max[0];
-  //min_max[3] = min_max[3] - min_max[1];
+  // min_max[2] = min_max[2] - min_max[0];
+  // min_max[3] = min_max[3] - min_max[1];
 
   // Viewport clipping is broken ATM
-  float min_max[4] = {0,0, C_f, R};
+  float min_max[4] = {0, 0, C_f, R};
 
   // Create the viewport buffer
-  viewport_buf = clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, 4 * sizeof(float), min_max, &err);
+  viewport_buf =
+      clCreateBuffer(context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
+                     4 * sizeof(float), min_max, &err);
   unsigned int width = (unsigned int)min_max[2];
   unsigned int height = (unsigned int)min_max[3];
 
-
   // Create output DRR C_f * R
   unsigned int drr_dims[] = {width, height};
-  output_drr = clCreateBuffer(context, CL_MEM_READ_WRITE, drr_dims[0] * drr_dims[1] * sizeof(unsigned short), NULL, &err);
+  output_drr = clCreateBuffer(
+      context, CL_MEM_READ_WRITE,
+      drr_dims[0] * drr_dims[1] * sizeof(unsigned short), NULL, &err);
   check_error(err, "Error creating output DRR");
   // Fill output DRR with zeros
   unsigned short zero = 0;
-  err = clEnqueueFillBuffer(queue, output_drr, &zero, sizeof(unsigned short), 0, drr_dims[0] * drr_dims[1] * sizeof(unsigned short), 0, NULL, NULL);
+  err = clEnqueueFillBuffer(queue, output_drr, &zero, sizeof(unsigned short), 0,
+                            drr_dims[0] * drr_dims[1] * sizeof(unsigned short),
+                            0, NULL, NULL);
   check_error(err, "Error filling output DRR with zeros");
-
-  
 
   // Set kernel arguments
   // Projected Image
@@ -319,7 +348,7 @@ int main(int argc, char* argv[]) {
   // Z0 (inital emiter position)
   err = clSetKernelArg(kernel, arg++, sizeof(float), &z0);
   check_error(err, "Error setting Z0");
-   //Lambda (emiter spacing)
+  // Lambda (emiter spacing)
   err = clSetKernelArg(kernel, arg++, sizeof(float), &lambda_f);
   check_error(err, "Error setting lambda");
   // Lambda_z
@@ -355,27 +384,33 @@ int main(int argc, char* argv[]) {
   err = clSetKernelArg(kernel, arg++, sizeof(unsigned int), &height);
   check_error(err, "Error setting height");
 
-
   // Run kernel as a 2D NDRange kernel
   size_t global_work_size[2] = {width, height};
   size_t local_work_size[2] = {1, 500};
-  std::cout << "Global work size: " << global_work_size[0] << " x " << global_work_size[1] << std::endl;
-  std::cout << "Local work size: " << local_work_size[0] << " x " << local_work_size[1] << std::endl;
-  std::cout << "Number of work groups: " << global_work_size[0] / local_work_size[0] << " x " << global_work_size[1] / local_work_size[1] << std::endl;
+  std::cout << "Global work size: " << global_work_size[0] << " x "
+            << global_work_size[1] << std::endl;
+  std::cout << "Local work size: " << local_work_size[0] << " x "
+            << local_work_size[1] << std::endl;
+  std::cout << "Number of work groups: "
+            << global_work_size[0] / local_work_size[0] << " x "
+            << global_work_size[1] / local_work_size[1] << std::endl;
   std::cout << "Running kernel... " << std::endl;
-  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_work_size, local_work_size, 0, NULL, NULL);
+  err = clEnqueueNDRangeKernel(queue, kernel, 2, NULL, global_work_size,
+                               local_work_size, 0, NULL, NULL);
   check_error(err, "Error running kernel");
 
-  //wait for kernel to finish
-  check_error(clFinish(queue),"Error waiting for the kernel to finish");
+  // wait for kernel to finish
+  check_error(clFinish(queue), "Error waiting for the kernel to finish");
   std::cout << "Done" << std::endl;
 
   // Copy the output DRR to file
-  unsigned short* drr_data = new unsigned short[drr_dims[0] * drr_dims[1]];
-  err = clEnqueueReadBuffer(queue, output_drr, CL_TRUE, 0, drr_dims[0] * drr_dims[1] * sizeof(unsigned short), drr_data, 0, NULL, NULL);
+  unsigned short *drr_data = new unsigned short[drr_dims[0] * drr_dims[1]];
+  err = clEnqueueReadBuffer(queue, output_drr, CL_TRUE, 0,
+                            drr_dims[0] * drr_dims[1] * sizeof(unsigned short),
+                            drr_data, 0, NULL, NULL);
   check_error(err, "Error reading output DRR from device");
   save_debug_image(outFname, drr_data, drr_dims[0], drr_dims[1]);
-  
+
   std::cout << "Cleaning up..." << std::endl;
   // Clean up
   delete[] vol_data;
@@ -388,6 +423,4 @@ int main(int argc, char* argv[]) {
   clReleaseCommandQueue(queue);
   clReleaseContext(context);
   return 0;
-} 
-
-
+}
