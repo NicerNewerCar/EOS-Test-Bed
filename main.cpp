@@ -1,6 +1,6 @@
 #include "src/Raycaster.hpp"
-#include <opencv2/core/core.hpp>
-#include <opencv2/opencv.hpp>
+#include <cfloat>
+#include <fstream>
 #include <string>
 
 // EOS parameters
@@ -21,28 +21,34 @@ unsigned int C_l = 1763;
 float z0 = 100.f;            // Initial z value (mm)
 unsigned int is_lateral = 0; // 0 if frontal, 1 if lateral
 
-void cv_write(float *buffer, int R, int C, std::string filename) {
-  cv::Mat color;
-  color = cv::Mat::zeros(R, C, CV_64F);
-
-  // Fill buffer
+void rescale_write(float *buffer, int R, int C, std::string filename) {
+  float old_min = FLT_MAX;
+  float old_max = FLT_MIN;
   for (int v = 0; v < R; ++v) {
     for (int u = 0; u < C; ++u) {
-      float val = buffer[R * u + v];
-      color.at<double>(v, u) = val;
+      float val = buffer[C * v + u];
+      old_min = (val < old_min) ? val : old_min;
+      old_max = (val > old_max) ? val : old_max;
+    }
+  }
+  unsigned char *scaled_buffer =
+      new unsigned char[C * R * sizeof(unsigned char)];
+  unsigned char new_min = 0;
+  unsigned char new_max = 255;
+  for (int v = 0; v < R; ++v) {
+    for (int u = 0; u < C; ++u) {
+      float val = buffer[C * v + u];
+      unsigned char scaled_val =
+          ((val - old_min) / (old_max - old_min)) * (new_max - new_min) +
+          new_min;
+      scaled_buffer[C * v + u] = scaled_val;
     }
   }
 
-  // Scale to 0-255
-  double min;
-  double max;
-  cv::minMaxIdx(color, &min, &max);
-  float scale = 255 / (max - min);
-  cv::Mat color_scaled;
-  color_scaled = cv::Mat::zeros(R, C_f, CV_8UC1);
-  color.convertTo(color_scaled, CV_8UC1, scale, -min * scale);
-
-  cv::imwrite(filename, color_scaled);
+  std::ofstream ofs(filename.c_str(), std::ios::out);
+  ofs << "P5\n" << C << " " << R << "\n255\n";
+  ofs.write((char *)scaled_buffer, C * R * sizeof(unsigned char));
+  ofs.close();
 }
 
 int main(int argc, const char **argv) {
@@ -54,7 +60,7 @@ int main(int argc, const char **argv) {
 
   float *buffer = new float[C_f * R * sizeof(float)];
   frontal_caster.render(buffer, C_f, R, z0);
-  cv_write(buffer, R, C_f, "EOS-frontal-test.pgm");
+  rescale_write(buffer, R, C_f, "EOS-frontal-test.pgm");
 
   RayCaster lateral_caster(d_l, f_l, lambda_l, lambda_z, true);
   lateral_caster.setVolume(filename);
@@ -62,7 +68,7 @@ int main(int argc, const char **argv) {
   free(buffer);
   buffer = new float[C_l * R * sizeof(float)];
   lateral_caster.render(buffer, C_l, R, z0);
-  cv_write(buffer, R, C_l, "EOS-lateral-test.pgm");
+  rescale_write(buffer, R, C_l, "EOS-lateral-test.pgm");
 
   return 0;
 }

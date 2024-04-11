@@ -44,11 +44,11 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
       cameraPos[2] = lamdba_vert * v - z0;
 
       // Frontal geometry
-      Eigen::Vector3f ray_direction(1.f, (((C / 2.f) - u) * lamdba_hori) / sdd,
-                                    cameraPos[2] / sdd);
+      Eigen::Vector3f ray_direction(
+          sdd - sid, ((u - (C / 2.f)) * lamdba_hori * sdd) / sid, cameraPos[2]);
       if (is_lateral) {
-        ray_direction[0] = (((C / 2.f) - u) * lamdba_hori) / sdd;
-        ray_direction[1] = 1.f;
+        ray_direction[0] = ((u - (C / 2.f)) * lamdba_hori * sdd) / sid;
+        ray_direction[1] = sdd - sid;
       }
 
       float near;
@@ -62,7 +62,7 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
 
       // Ray Marching
       Eigen::Vector3f p;
-      float step = 0.1;
+      float step = 0.001;
       float t = near;
       float sum = 0;
       while (t < far) {
@@ -85,7 +85,8 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
         sum += trilinear_interpolation(p_model);
       }
       double val = sum / 10.f;
-      buffer[R * u + v] = val;
+      // buffer[R * u + v] = val;
+      buffer[C * v + u] = val;
     }
   }
 }
