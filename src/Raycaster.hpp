@@ -1,6 +1,7 @@
 #pragma once
 
 #include <Eigen/Core>
+#include <Eigen/Geometry>
 #include <Eigen/src/Core/Matrix.h>
 #include <string>
 
@@ -37,6 +38,7 @@ private:
     Eigen::Vector3f origin;
     Eigen::Vector3f s;
     Eigen::Vector3f vs_inv;
+    Eigen::Affine3f transformation;
     int *data;
     int operator()(int i, int j, int k) const {
       return data[i + dims[0] * j + dims[0] * dims[1] * k];

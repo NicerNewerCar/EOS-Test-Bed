@@ -1,5 +1,7 @@
 #include "src/Raycaster.hpp"
+#include <Eigen/src/Core/Matrix.h>
 #include <cfloat>
+#include <cmath>
 #include <fstream>
 #include <string>
 
@@ -54,6 +56,11 @@ void rescale_write(float *buffer, int R, int C, std::string filename) {
 int main(int argc, const char **argv) {
   std::string filename =
       "/home/aj/Documents/EOS-Test-Bed/Volumes/eos-test.nrrd";
+
+  Eigen::Matrix3f rotation_x, rotation_y, rotation_z, rotation;
+  rotation_x = Eigen::Matrix3f::Identity();
+  rotation_y = Eigen::Matrix3f::Identity();
+  rotation_z = Eigen::Matrix3f::Identity();
 
   RayCaster frontal_caster(d_f, f_f, lambda_f, lambda_z, false);
   frontal_caster.setVolume(filename);

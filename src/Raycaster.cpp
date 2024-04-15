@@ -30,6 +30,8 @@ RayCaster::Vol::Vol(const std::string &filename) {
       this->dims[0] * this->dims[1] * this->dims[2] * sizeof(int);
   this->data = new int[data_size];
   memcpy((void *)this->data, nrrd->data, data_size);
+
+  transformation = Eigen::Affine3f::Identity();
 }
 
 void RayCaster::render(float *buffer, int C, int R, int z0) {
@@ -38,35 +40,49 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
     cameraPos[0] = 0.f;
     cameraPos[1] = -sid;
   }
+  // vol.transformation.rotate(
+  //     Eigen::AngleAxisf(90 * M_PI / 180.0, Eigen::Vector3f::UnitX()));
+  // vol.transformation.rotate(
+  //     Eigen::AngleAxisf(90 * M_PI / 180.0, Eigen::Vector3f::UnitY()));
+  // vol.transformation.rotate(
+  //     Eigen::AngleAxisf(90 * M_PI / 180.0, Eigen::Vector3f::UnitZ()));
+  // vol.transformation.translate(Eigen::Vector3f(0.f, 0.f, 0.f));
 #pragma omp parallel for
   for (int v = 0; v < R; ++v) {
     for (int u = 0; u < C; ++u) {
-      cameraPos[2] = lamdba_vert * v - z0;
+      cameraPos[2] = z0 - v * lamdba_vert;
 
       // Frontal geometry
-      Eigen::Vector3f ray_direction(
+      Eigen::Vector3f detector_position(
           sdd - sid, ((u - (C / 2.f)) * lamdba_hori * sdd) / sid, cameraPos[2]);
       if (is_lateral) {
-        ray_direction[0] = ((u - (C / 2.f)) * lamdba_hori * sdd) / sid;
-        ray_direction[1] = sdd - sid;
+        detector_position[0] = ((u - (C / 2.f)) * lamdba_hori * sdd) / sid;
+        detector_position[1] = sdd - sid;
       }
+
+      Eigen::Vector3f ray_direction = detector_position - cameraPos;
+      ray_direction.normalize();
 
       float near;
       float far;
       rayBoxIntersection(cameraPos, ray_direction, near, far);
 
       if (near > far) { // Missed
-        buffer[R * u + v] = 0.f;
+        buffer[C * v + u] = 0.f;
         continue;
       }
 
+      Eigen::Affine3f vol_transformed =
+          vol.transformation.inverse() * Eigen::Translation3f(cameraPos);
+
       // Ray Marching
       Eigen::Vector3f p;
-      float step = 0.001;
+      float step = 0.1;
       float t = near;
       float sum = 0;
       while (t < far) {
-        p = cameraPos + t * ray_direction;
+        // p = cameraPos + t * ray_direction;
+        p = vol_transformed * (t * ray_direction);
         t += step;
 
         // Check to see if we are out of the CT
@@ -93,14 +109,14 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
 
 float RayCaster::trilinear_interpolation(Eigen::Vector3f p) {
   // See https://en.wikipedia.org/wiki/Trilinear_interpolation
-  Eigen::Vector3i p000 = Eigen::Vector3i(floor(p[0]), floor(p[1]), floor(p[2]));
-  Eigen::Vector3i p111 = Eigen::Vector3i(p000[0] + 1, p000[1] + 1, p000[2] + 1);
-  Eigen::Vector3i p011 = Eigen::Vector3i(p000[0], p000[1] + 1, p000[2] + 1);
-  Eigen::Vector3i p001 = Eigen::Vector3i(p000[0], p000[1], p000[2] + 1);
-  Eigen::Vector3i p101 = Eigen::Vector3i(p000[0] + 1, p000[1], p000[2] + 1);
-  Eigen::Vector3i p100 = Eigen::Vector3i(p000[0] + 1, p000[1], p000[2]);
-  Eigen::Vector3i p110 = Eigen::Vector3i(p000[0] + 1, p000[1] + 1, p000[2]);
-  Eigen::Vector3i p010 = Eigen::Vector3i(p000[0], p000[1] + 1, p000[2]);
+  Eigen::Vector3i p000 = p.cast<int>();
+  Eigen::Vector3i p111 = p000 + Eigen::Vector3i::Ones();
+  Eigen::Vector3i p001(p000[0], p000[1], p111[2]);
+  Eigen::Vector3i p010(p000[0], p111[1], p000[2]);
+  Eigen::Vector3i p100(p111[0], p000[1], p000[2]);
+  Eigen::Vector3i p011(p000[0], p111[1], p111[2]);
+  Eigen::Vector3i p101(p111[0], p000[1], p111[2]);
+  Eigen::Vector3i p110(p111[0], p111[1], p000[2]);
 
   float u000 = vol(p000[0], p000[1], p000[2]);
   float u100 = vol(p100[0], p100[1], p100[2]);
@@ -133,23 +149,14 @@ void RayCaster::rayBoxIntersection(Eigen::Vector3f ray_origin,
                                    float &far) {
   // See https://education.siggraph.org/static/HyperGraph/raytrace/rtinter3.htm
   Eigen::Vector3f boxMin(-vol.s.x(), -vol.s.y(), -vol.s.z());
-  Eigen::Vector3f boxMax(vol.s.x(), vol.s.y(), vol.s.z());
+  Eigen::Vector3f boxMax = vol.s.array();
 
-  Eigen::Vector3f tBot((boxMin.x() - ray_origin.x()) / ray_direction.x(),
-                       (boxMin.y() - ray_origin.y()) / ray_direction.y(),
-                       (boxMin.z() - ray_origin.z()) / ray_direction.z());
+  Eigen::Vector3f invRayDir = ray_direction.array().inverse();
+  Eigen::Vector3f t1 = (boxMin - ray_origin).array() * invRayDir.array();
+  Eigen::Vector3f t2 = (boxMax - ray_origin).array() * invRayDir.array();
 
-  Eigen::Vector3f tTop((boxMax.x() - ray_origin.x()) / ray_direction.x(),
-                       (boxMax.y() - ray_origin.y()) / ray_direction.y(),
-                       (boxMax.z() - ray_origin.z()) / ray_direction.z());
-
-  Eigen::Vector3f tMin(std::min(tBot.x(), tTop.x()),
-                       std::min(tBot.y(), tTop.y()),
-                       std::min(tBot.z(), tTop.z()));
-
-  Eigen::Vector3f tMax(std::max(tBot.x(), tTop.x()),
-                       std::max(tBot.y(), tTop.y()),
-                       std::max(tBot.z(), tTop.z()));
+  Eigen::Vector3f tMin = t1.array().min(t2.array());
+  Eigen::Vector3f tMax = t1.array().max(t2.array());
 
   near = tMin.maxCoeff();
   far = tMax.minCoeff();
