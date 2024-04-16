@@ -2,7 +2,6 @@
 
 #include <Eigen/Core>
 #include <Eigen/Geometry>
-#include <Eigen/src/Core/Matrix.h>
 #include <string>
 
 class RayCaster {
@@ -18,8 +17,16 @@ public:
   void render(float *buffer, int C, int R, int z0);
   float trilinear_interpolation(Eigen::Vector3f p);
   void rayBoxIntersection(Eigen::Vector3f ray_origin,
-                          Eigen::Vector3f ray_direction, float &near,
+                          Eigen::Vector3f ray_direction,
+                          Eigen::Vector3f s_transformed, float &near,
                           float &far);
+
+  void rotate(float theta, Eigen::Vector3f axis) {
+    vol.transformation.rotate(Eigen::AngleAxisf(theta * M_PI / 180.0, axis));
+  }
+  void translate(Eigen::Vector3f translation) {
+    vol.transformation.translate(translation);
+  }
 
 private:
   float sdd;

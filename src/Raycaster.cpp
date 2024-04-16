@@ -1,5 +1,4 @@
 #include "Raycaster.hpp"
-#include <Eigen/src/Core/Matrix.h>
 #include <teem/nrrd.h>
 
 RayCaster::Vol::Vol(const std::string &filename) {
@@ -40,13 +39,9 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
     cameraPos[0] = 0.f;
     cameraPos[1] = -sid;
   }
-  // vol.transformation.rotate(
-  //     Eigen::AngleAxisf(90 * M_PI / 180.0, Eigen::Vector3f::UnitX()));
-  // vol.transformation.rotate(
-  //     Eigen::AngleAxisf(90 * M_PI / 180.0, Eigen::Vector3f::UnitY()));
-  // vol.transformation.rotate(
-  //     Eigen::AngleAxisf(90 * M_PI / 180.0, Eigen::Vector3f::UnitZ()));
-  // vol.transformation.translate(Eigen::Vector3f(0.f, 0.f, 0.f));
+
+  Eigen::Vector3f s_transformed = (vol.transformation * vol.s).cwiseAbs();
+
 #pragma omp parallel for
   for (int v = 0; v < R; ++v) {
     for (int u = 0; u < C; ++u) {
@@ -65,7 +60,7 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
 
       float near;
       float far;
-      rayBoxIntersection(cameraPos, ray_direction, near, far);
+      rayBoxIntersection(cameraPos, ray_direction, s_transformed, near, far);
 
       if (near > far) { // Missed
         buffer[C * v + u] = 0.f;
@@ -86,22 +81,21 @@ void RayCaster::render(float *buffer, int C, int R, int z0) {
         t += step;
 
         // Check to see if we are out of the CT
-        if (p.x() <= -vol.s.x() || p.x() >= vol.s.x() - 2)
+        if (p.x() <= -s_transformed.x() || p.x() >= s_transformed.x() - 2)
           continue;
-        if (p.y() <= -vol.s.y() || p.y() >= vol.s.y() - 2)
+        if (p.y() <= -s_transformed.y() || p.y() >= s_transformed.y() - 2)
           continue;
-        if (p.z() <= -vol.s.z() || p.z() >= vol.s.z() - 2)
+        if (p.z() <= -s_transformed.z() || p.z() >= s_transformed.z() - 2)
           continue;
 
         // If inside the CT, we convert our coordinates to the CT coordinates
-        Eigen::Vector3f p_model((p.x() + vol.s.x()) * vol.vs_inv.x(),
-                                (p.y() + vol.s.y()) * vol.vs_inv.y(),
-                                (p.z() + vol.s.z()) * vol.vs_inv.z());
+        Eigen::Vector3f p_model((p.x() + s_transformed.x()) * vol.vs_inv.x(),
+                                (p.y() + s_transformed.y()) * vol.vs_inv.y(),
+                                (p.z() + s_transformed.z()) * vol.vs_inv.z());
 
         sum += trilinear_interpolation(p_model);
       }
       double val = sum / 10.f;
-      // buffer[R * u + v] = val;
       buffer[C * v + u] = val;
     }
   }
@@ -145,11 +139,13 @@ float RayCaster::trilinear_interpolation(Eigen::Vector3f p) {
 }
 
 void RayCaster::rayBoxIntersection(Eigen::Vector3f ray_origin,
-                                   Eigen::Vector3f ray_direction, float &near,
+                                   Eigen::Vector3f ray_direction,
+                                   Eigen::Vector3f s_transformed, float &near,
                                    float &far) {
   // See https://education.siggraph.org/static/HyperGraph/raytrace/rtinter3.htm
-  Eigen::Vector3f boxMin(-vol.s.x(), -vol.s.y(), -vol.s.z());
-  Eigen::Vector3f boxMax = vol.s.array();
+  Eigen::Vector3f boxMin(-s_transformed.x(), -s_transformed.y(),
+                         -s_transformed.z());
+  Eigen::Vector3f boxMax = s_transformed.array();
 
   Eigen::Vector3f invRayDir = ray_direction.array().inverse();
   Eigen::Vector3f t1 = (boxMin - ray_origin).array() * invRayDir.array();
